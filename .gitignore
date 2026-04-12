@@ -25,3 +25,7 @@ htmlcov/
 .venv/
 venv/
 ENV/
+
+# Patent documents (kept locally, not in public repo)
+PATENT_PROVISIONAL*.md
+PATENT_PROVISIONAL*.pdf
