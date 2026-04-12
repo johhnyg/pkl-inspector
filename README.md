@@ -1,5 +1,7 @@
 # pkl-inspector
 
+> **Patent Pending** — US Provisional Application filed April 12, 2026
+
 **Static analysis for Python pickle files — detects malicious code without executing it.**
 
 [![PyPI version](https://badge.fury.io/py/pkl-inspector.svg)](https://pypi.org/project/pkl-inspector/)
