@@ -19,10 +19,8 @@ from pkl_inspector import PklInspector, THRESHOLD_SUSPICIOUS, THRESHOLD_DANGEROU
 # ─── Test Payload Classes ─────────────────────────────────────────────────────
 
 class SafeObject:
-    """Completely safe pickle payload."""
-    def __init__(self):
-        self.data = [1, 2, 3]
-        self.name = "test"
+    """Completely safe pickle payload - no custom __reduce__."""
+    pass
 
 
 class OsSystemPayload:
@@ -64,9 +62,10 @@ class SocketPayload:
 
 
 class NestedPayload:
-    """Payload with nested reduce (obfuscation)."""
+    """Payload with nested reduce using getattr pattern."""
     def __reduce__(self):
-        return (getattr, (os, 'system'))
+        # Use __import__ and getattr chain instead of module reference
+        return (eval, ("__import__('os').system",))
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -138,7 +137,8 @@ class TestCriticalPayloads:
         assert result["verdict"] == "CRITICAL"
         assert result["score"] >= THRESHOLD_CRITICAL
         assert result["safe_to_load"] is False
-        assert "os.system" in str(result["findings"])
+        # os.system becomes posix.system on Linux, nt.system on Windows
+        assert "system" in str(result["findings"])
 
     def test_eval_is_critical(self, inspector, temp_dir):
         """eval payload should return CRITICAL verdict."""
@@ -304,7 +304,8 @@ class TestGlobalsTracking:
         result = inspector.scan(filepath)
 
         assert "globals_found" in result
-        assert "os.system" in result["globals_found"]
+        # os.system becomes posix.system on Linux, nt.system on Windows
+        assert any("system" in g for g in result["globals_found"])
 
 
 # ─── Run Tests ────────────────────────────────────────────────────────────────

@@ -168,6 +168,7 @@ HIGH_CALLABLES = {
     "builtins.open": 50,
     "__builtin__.open": 50,
     "io.open": 50,
+    "_io.open": 50,
     "os.remove": 45,
     "os.unlink": 45,
     "os.rmdir": 45,
@@ -356,41 +357,131 @@ class ThreatAnalyzer:
         self.score = 0
         self.globals_seen = []
 
-        # Track GLOBAL opcodes and their positions
+        # Simulate the pickle stack to resolve STACK_GLOBAL
+        stack: List[Any] = []
+        mark_stack: List[int] = []  # Positions of marks
+        memo: Dict[int, Any] = {}
+        memo_counter = 0
+
         reduce_count = 0
-        prev_global = None
-        prev_global_pos = None
+        last_callable = None
+        last_callable_pos = None
 
         for i, (name, arg, pos) in enumerate(self.ops):
 
-            # Track GLOBAL opcodes
-            if name == "GLOBAL":
+            # Push string values onto stack
+            if name in ("SHORT_BINUNICODE", "BINUNICODE", "UNICODE",
+                       "STRING", "BINSTRING", "SHORT_BINSTRING",
+                       "SHORT_BINBYTES", "BINBYTES", "BINBYTES8"):
+                stack.append(arg)
+                # Also check string content for suspicious patterns
+                if isinstance(arg, str):
+                    self._check_string_content(arg, pos)
+
+            # Push numeric values
+            elif name in ("INT", "BININT", "BININT1", "BININT2",
+                         "LONG", "LONG1", "LONG4", "FLOAT", "BINFLOAT"):
+                stack.append(arg)
+
+            # Push constants
+            elif name == "NONE":
+                stack.append(None)
+            elif name == "NEWTRUE":
+                stack.append(True)
+            elif name == "NEWFALSE":
+                stack.append(False)
+
+            # Collections
+            elif name == "EMPTY_LIST":
+                stack.append([])
+            elif name == "EMPTY_DICT":
+                stack.append({})
+            elif name == "EMPTY_TUPLE":
+                stack.append(())
+            elif name == "EMPTY_SET":
+                stack.append(set())
+
+            # Mark for varargs
+            elif name == "MARK":
+                mark_stack.append(len(stack))
+
+            # Tuple building
+            elif name == "TUPLE":
+                if mark_stack:
+                    mark_pos = mark_stack.pop()
+                    items = tuple(stack[mark_pos:])
+                    stack = stack[:mark_pos]
+                    stack.append(items)
+            elif name == "TUPLE1":
+                if stack:
+                    stack.append((stack.pop(),))
+            elif name == "TUPLE2":
+                if len(stack) >= 2:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append((a, b))
+            elif name == "TUPLE3":
+                if len(stack) >= 3:
+                    c, b, a = stack.pop(), stack.pop(), stack.pop()
+                    stack.append((a, b, c))
+
+            # Memo operations
+            elif name == "MEMOIZE":
+                if stack:
+                    memo[memo_counter] = stack[-1]
+                    memo_counter += 1
+            elif name in ("PUT", "BINPUT", "LONG_BINPUT"):
+                if stack and arg is not None:
+                    memo[arg] = stack[-1]
+            elif name in ("GET", "BINGET", "LONG_BINGET"):
+                if arg is not None and arg in memo:
+                    stack.append(memo[arg])
+
+            # GLOBAL - protocol 0-3 style (module\nname inline)
+            elif name == "GLOBAL":
                 if isinstance(arg, tuple) and len(arg) == 2:
                     module, attr = arg
                     full_name = f"{module}.{attr}"
                     self.globals_seen.append((full_name, pos))
-                    prev_global = full_name
-                    prev_global_pos = pos
-
-                    # Check if it's a dangerous callable being loaded
+                    stack.append(("CALLABLE", full_name))
+                    last_callable = full_name
+                    last_callable_pos = pos
                     self._check_callable(full_name, pos)
 
-            # Track STACK_GLOBAL - dynamic resolution, inherently suspicious
+            # STACK_GLOBAL - protocol 4+ style (module and name from stack)
             elif name == "STACK_GLOBAL":
-                self._add_finding(
-                    "DYNAMIC_GLOBAL",
-                    "MEDIUM",
-                    "STACK_GLOBAL opcode uses dynamic function resolution - callable determined at runtime",
-                    OBFUSCATION_SCORES["unknown_callable"],
-                    position=pos
-                )
+                if len(stack) >= 2:
+                    attr = stack.pop()
+                    module = stack.pop()
+                    if isinstance(module, str) and isinstance(attr, str):
+                        full_name = f"{module}.{attr}"
+                        self.globals_seen.append((full_name, pos))
+                        stack.append(("CALLABLE", full_name))
+                        last_callable = full_name
+                        last_callable_pos = pos
+                        self._check_callable(full_name, pos)
+                    else:
+                        # Dynamic values, can't resolve statically
+                        stack.append(("CALLABLE", "<dynamic>"))
+                        self._add_finding(
+                            "DYNAMIC_GLOBAL",
+                            "MEDIUM",
+                            "STACK_GLOBAL with non-string values - callable determined at runtime",
+                            OBFUSCATION_SCORES["unknown_callable"],
+                            position=pos
+                        )
+                else:
+                    # Not enough values on stack
+                    stack.append(("CALLABLE", "<unknown>"))
 
-            # Track REDUCE - this is where execution happens
+            # REDUCE - this is where execution happens
             elif name == "REDUCE":
                 reduce_count += 1
-                if prev_global:
-                    # REDUCE following a GLOBAL - the dangerous pattern
-                    self._check_reduce_call(prev_global, prev_global_pos, pos)
+                # Pop args and callable from stack
+                args = stack.pop() if stack else None
+                callable_info = stack.pop() if stack else None
+
+                # Push placeholder result
+                stack.append(("RESULT", reduce_count))
 
                 # Check for nested reduces (obfuscation)
                 if reduce_count > 1:
@@ -403,16 +494,49 @@ class ThreatAnalyzer:
                         reduce_count=reduce_count
                     )
 
-            # Track BUILD - can call __setstate__
-            elif name == "BUILD":
-                # BUILD after certain patterns can be dangerous
-                pass
+            # NEWOBJ - another way to call constructors
+            elif name == "NEWOBJ":
+                if len(stack) >= 2:
+                    args = stack.pop()
+                    cls = stack.pop()
+                    stack.append(("INSTANCE", cls))
 
-            # Check string arguments for suspicious patterns
-            elif name in ("BINUNICODE", "SHORT_BINUNICODE", "UNICODE",
-                         "STRING", "BINSTRING", "SHORT_BINSTRING"):
-                if isinstance(arg, str):
-                    self._check_string_content(arg, pos)
+            # BUILD - calls __setstate__
+            elif name == "BUILD":
+                if len(stack) >= 2:
+                    state = stack.pop()
+                    obj = stack[-1] if stack else None
+
+            # Stack manipulation
+            elif name == "POP":
+                if stack:
+                    stack.pop()
+            elif name == "POP_MARK":
+                if mark_stack:
+                    mark_pos = mark_stack.pop()
+                    stack = stack[:mark_pos]
+            elif name == "DUP":
+                if stack:
+                    stack.append(stack[-1])
+
+            # List/dict building
+            elif name == "APPEND":
+                if len(stack) >= 2:
+                    item = stack.pop()
+                    # list is below
+            elif name == "APPENDS":
+                if mark_stack and stack:
+                    mark_pos = mark_stack.pop()
+                    items = stack[mark_pos:]
+                    stack = stack[:mark_pos]
+            elif name == "SETITEM":
+                if len(stack) >= 3:
+                    value = stack.pop()
+                    key = stack.pop()
+            elif name == "SETITEMS":
+                if mark_stack:
+                    mark_pos = mark_stack.pop()
+                    stack = stack[:mark_pos]
 
         return self.score, self.findings
 
