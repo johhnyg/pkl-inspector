@@ -7,11 +7,9 @@ name = "pkl-inspector"
 version = "0.1.0"
 description = "Static analysis for Python pickle files — detects malicious code without executing it"
 readme = "README.md"
-license = {text = "MIT"}
+requires-python = ">=3.8"
+dependencies = []
 authors = [
-    {name = "stillrunning.io", email = "security@stillrunning.io"}
-]
-maintainers = [
     {name = "stillrunning.io", email = "security@stillrunning.io"}
 ]
 keywords = [
@@ -20,16 +18,12 @@ keywords = [
     "static-analysis",
     "malware-detection",
     "supply-chain",
-    "machine-learning",
-    "deserialization"
+    "machine-learning"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "Intended Audience :: Information Technology",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -37,26 +31,15 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Security",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Quality Assurance",
-    "Typing :: Typed"
+    "Topic :: Security"
 ]
-requires-python = ">=3.8"
-dependencies = []  # Zero dependencies!
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0"
-]
+dev = ["pytest>=7.0"]
 
 [project.urls]
 Homepage = "https://stillrunning.io"
-Documentation = "https://github.com/johhnyg/pkl-inspector"
 Repository = "https://github.com/johhnyg/pkl-inspector"
-Issues = "https://github.com/johhnyg/pkl-inspector/issues"
-Changelog = "https://github.com/johhnyg/pkl-inspector/releases"
 
 [project.scripts]
 pkl-inspector = "pkl_inspector:main"
@@ -64,23 +47,5 @@ pkl-inspector = "pkl_inspector:main"
 [tool.setuptools]
 py-modules = ["pkl_inspector"]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["pkl_inspector*"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
-
-[tool.coverage.run]
-source = ["pkl_inspector"]
-branch = true
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
-    "raise NotImplementedError"
-]
