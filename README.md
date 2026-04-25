@@ -4,7 +4,7 @@
 
 **Static analysis for Python pickle files — detects malicious code without executing it.**
 
-[![PyPI version](https://badge.fury.io/py/pkl-inspector.svg)](https://pypi.org/project/pkl-inspector/)
+[![PyPI version](https://img.shields.io/pypi/v/pkl-inspector)](https://pypi.org/project/pkl-inspector/)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
