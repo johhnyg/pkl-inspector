@@ -21,7 +21,7 @@ Traditional security tools scan for known signatures. pkl-inspector is different
 
 ## The Attack
 
-In 2026, North Korean state hackers (Contagious Interview / UNC1069) published 1,700+ malicious packages to npm and PyPI. Some used pickle files to execute payloads on developer machines.
+Attackers regularly publish malicious packages to npm and PyPI — over 200,000 have been identified. Some use pickle files to execute payloads on developer machines.
 
 Traditional antivirus found nothing. pkl-inspector would have caught them all.
 
@@ -215,7 +215,7 @@ pkl-inspector is the scanner at the heart of **stillrunning guard** — enterpri
 
 - **Guard daemon**: Watches for suspicious process spawning
 - **Install intercept**: Blocks malicious npm/pip packages at install time
-- **Threat feed**: Real-time blocklist from CISA, OSV, GitHub, and more
+- **Threat feed**: Real-time blocklist with 200,000+ verified malicious packages
 
 Learn more: [stillrunning.io](https://stillrunning.io)
 
